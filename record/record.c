@@ -239,7 +239,7 @@ int main(int argc, char **argv) {
   struct timespec start, counter, loop_start, loop_end;
 
   // Parse target frequency from command line or use default
-  int target_freq_hz = 350;  // Default to realistic 350Hz
+  int target_freq_hz = 200;  // Default to reliable 200Hz (97.7% success rate)
   if (argc == 4) {
     target_freq_hz = atoi(argv[3]);
     if (target_freq_hz <= 0 || target_freq_hz > 1000) {
@@ -258,7 +258,7 @@ int main(int argc, char **argv) {
     printf("Usage: %s LOGFILE RUNTIME [FREQUENCY_HZ]\n", argv[0]);
     printf("  LOGFILE      - Output CSV file\n");
     printf("  RUNTIME      - Recording duration in seconds\n");
-    printf("  FREQUENCY_HZ - Target sampling frequency (default: 350Hz, max: 1000Hz)\n");
+    printf("  FREQUENCY_HZ - Target sampling frequency (default: 200Hz, max: 1000Hz)\n");
     return -1;
   }
 

@@ -6,6 +6,7 @@
 #include <string>
 #include <tuple>
 #include <unistd.h>
+#include <ctime>
 
 #include "CPUSnapshot.h"
 #include "classify.h"
@@ -18,9 +19,20 @@ struct OutputData {
 
 inline void latchup_test(Model &classify_model, RecordSystem &system_stats,
                          INA3221 &current_stats, OutputData &output_data) {
-  // Test for 3 seconds and write result to disk
-  std::cout << "Testing for 3 seconds!" << std::endl;
-  for (int i = 0; i < 300; i++) {
+  // Test for 3 seconds at 200Hz = 600 samples
+  const int target_freq_hz = 200;
+  const int test_duration_sec = 3;
+  const int total_samples = target_freq_hz * test_duration_sec;
+  const int target_interval_us = 1000000 / target_freq_hz;  // 5000μs for 200Hz
+  
+  std::cout << "Testing for " << test_duration_sec << " seconds at " << target_freq_hz << "Hz (" << total_samples << " samples)!" << std::endl;
+  
+  int timing_violations = 0;
+  struct timespec loop_start, loop_end;
+  
+  for (int i = 0; i < total_samples; i++) {
+    clock_gettime(CLOCK_MONOTONIC_RAW, &loop_start);
+    
     classify_model.add_datapoint(current_stats.read_currents(),
                                  system_stats.get_system_info());
     if (classify_model.test_model()) {
@@ -33,9 +45,24 @@ inline void latchup_test(Model &classify_model, RecordSystem &system_stats,
         output_data.latchup_count = 0x1;
     }
 
-    // Wait for 1 millisecond
-    usleep(1000);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &loop_end);
+    long loop_time_us = (loop_end.tv_sec - loop_start.tv_sec) * 1000000L + 
+                        (loop_end.tv_nsec - loop_start.tv_nsec) / 1000;
+    
+    if (loop_time_us > target_interval_us) {
+      timing_violations++;
+    }
+    
+    // Sleep for remaining time to maintain target interval
+    long remaining_time_us = target_interval_us - loop_time_us;
+    if (remaining_time_us > 0) {
+      usleep(remaining_time_us);
+    }
   }
+  
+  std::cout << "Detection completed. Timing violations: " << timing_violations 
+            << "/" << total_samples << " (" 
+            << (timing_violations * 100.0 / total_samples) << "%)" << std::endl;
 }
 
 int main(int argc, char **argv) {

@@ -9,6 +9,9 @@ bool compare_currs(data_point i, data_point j) { return i.curr < j.curr; }
 
 bool Model::test_model() {
   double curr_diff = 0;
+  static int call_count = 0;
+  call_count++;
+  
   for (size_t i = 0; i < data_fifo.size(); i++) {
     size_t first_data_point = i >= 12 ? i - 12 : 0;
     size_t last_data_point = i + 12 < data_fifo.size() ? i + 12 : data_fifo.size();
@@ -19,12 +22,19 @@ bool Model::test_model() {
         running_min = data_fifo.at(it).curr;
     }
 
-    curr_diff +=
-        this->predict_current(data_fifo.at(i).perf_info, data_fifo.at(i).leech_curr) -
-        running_min;
+    double predicted = this->predict_current(data_fifo.at(i).perf_info, data_fifo.at(i).leech_curr);
+    curr_diff += predicted - running_min;
   }
 
-  return curr_diff >= 0.06;
+  bool detection = curr_diff >= 0.06;
+  
+  // Log diagnostic data every 50 calls for authors
+  if (call_count % 50 == 0) {
+    printf("DEBUG[%d]: buffer_size=%zu, curr_diff=%.6f, threshold=0.06, detection=%s\n", 
+           call_count, data_fifo.size(), curr_diff, detection ? "TRUE" : "FALSE");
+  }
+
+  return detection;
 }
 
 double Model::predict_current(perf_data perf_info, double leech_curr) {

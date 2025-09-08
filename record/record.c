@@ -248,6 +248,19 @@ int main(int argc, char **argv) {
     printf("Usage: %s LOGFILE RUNTIME\n", argv[0]);
     return -1;
   }
+  
+  int runtime = atoi(argv[2]);
+  
+  // File I/O buffering variables - buffer everything in memory
+  // Estimate: ~600 bytes per line * runtime * 1000 samples/sec
+  size_t estimated_buffer_size = runtime * 1000 * 600;
+  char *output_buffer = malloc(estimated_buffer_size);
+  int buffer_pos = 0;
+  
+  if (!output_buffer) {
+    printf("Failed to allocate output buffer\n");
+    return -1;
+  }
 
   // Setup I2C communication
   int i2c = open("/dev/i2c-1", O_RDWR);
@@ -295,8 +308,6 @@ int main(int argc, char **argv) {
           "bus_cycles_2,freq_2,cpu_cycles_3,insns_3,cache_hit_3,cache_miss_3,"
           "br_insns_3,br_miss_3,bus_cycles_3,freq_3,rd_ios,wr_ios\n");
 
-  int runtime = atoi(argv[2]);
-
   for (int i = 0; i < runtime * 1000; i++) {
     // Start timing this loop iteration
     clock_gettime(CLOCK_MONOTONIC_RAW, &loop_start);
@@ -342,22 +353,29 @@ int main(int argc, char **argv) {
 
     clock_gettime(CLOCK_MONOTONIC_RAW, &counter);
 
-    // Print out current and perf data to file
-    fprintf(fd, "%ld,",
-            (counter.tv_sec - start.tv_sec) * 1000000 +
-                (counter.tv_nsec - start.tv_nsec) / 1000);
-    fprintf(fd, "%f,", ch2_amp);
-    fprintf(fd, "%f", ch3_amp);
-    for (int cpu = 0; cpu < sysconf(_SC_NPROCESSORS_ONLN); cpu++) {
-      fprintf(fd, ",%llu,%llu,%llu,%llu,%llu,%llu,%llu,%u",
-              perf_events[cpu].cpu_cycles, perf_events[cpu].insns,
-              perf_events[cpu].cache_hit, perf_events[cpu].cache_miss,
-              perf_events[cpu].br_insns, perf_events[cpu].br_miss,
-              perf_events[cpu].bus_cycles, perf_events[cpu].cpu_freq);
-    }
-    fprintf(fd, ",%lu,%lu", io_stats.rd_ios - io_stats_last.rd_ios,
-            io_stats.wr_ios - io_stats_last.wr_ios);
-    fprintf(fd, "\n");
+    // Build output line in buffer - no file I/O during collection
+    int line_len = snprintf(output_buffer + buffer_pos, estimated_buffer_size - buffer_pos,
+        "%ld,%f,%f,%llu,%llu,%llu,%llu,%llu,%llu,%llu,%u,"
+        "%llu,%llu,%llu,%llu,%llu,%llu,%llu,%u,"
+        "%llu,%llu,%llu,%llu,%llu,%llu,%llu,%u,"
+        "%llu,%llu,%llu,%llu,%llu,%llu,%llu,%u,%lu,%lu\n",
+        (counter.tv_sec - start.tv_sec) * 1000000 + (counter.tv_nsec - start.tv_nsec) / 1000,
+        ch2_amp, ch3_amp,
+        perf_events[0].cpu_cycles, perf_events[0].insns, perf_events[0].cache_hit, 
+        perf_events[0].cache_miss, perf_events[0].br_insns, perf_events[0].br_miss,
+        perf_events[0].bus_cycles, perf_events[0].cpu_freq,
+        perf_events[1].cpu_cycles, perf_events[1].insns, perf_events[1].cache_hit,
+        perf_events[1].cache_miss, perf_events[1].br_insns, perf_events[1].br_miss,
+        perf_events[1].bus_cycles, perf_events[1].cpu_freq,
+        perf_events[2].cpu_cycles, perf_events[2].insns, perf_events[2].cache_hit,
+        perf_events[2].cache_miss, perf_events[2].br_insns, perf_events[2].br_miss,
+        perf_events[2].bus_cycles, perf_events[2].cpu_freq,
+        perf_events[3].cpu_cycles, perf_events[3].insns, perf_events[3].cache_hit,
+        perf_events[3].cache_miss, perf_events[3].br_insns, perf_events[3].br_miss,
+        perf_events[3].bus_cycles, perf_events[3].cpu_freq,
+        io_stats.rd_ios - io_stats_last.rd_ios, io_stats.wr_ios - io_stats_last.wr_ios);
+    
+    buffer_pos += line_len;
 
     // Reset and restart perf counters
     for (int cpu = 0; cpu < sysconf(_SC_NPROCESSORS_ONLN); cpu++) {
@@ -397,6 +415,13 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Write all collected data to file at once
+  printf("Writing %d bytes of data to file...\n", buffer_pos);
+  if (buffer_pos > 0) {
+    fwrite(output_buffer, 1, buffer_pos, fd);
+    fflush(fd);
+  }
+
   close(i2c);
   printf("GPIO close\n");
 
@@ -422,5 +447,6 @@ int main(int argc, char **argv) {
   }
 
   fclose(fd);
+  free(output_buffer);
   return 0;
 }

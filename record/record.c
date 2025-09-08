@@ -238,14 +238,27 @@ int main(int argc, char **argv) {
   struct read_format *rf = (struct read_format *)buf;
   struct timespec start, counter, loop_start, loop_end;
 
+  // Parse target frequency from command line or use default
+  int target_freq_hz = 350;  // Default to realistic 350Hz
+  if (argc == 4) {
+    target_freq_hz = atoi(argv[3]);
+    if (target_freq_hz <= 0 || target_freq_hz > 1000) {
+      printf("Invalid frequency %d Hz. Must be 1-1000 Hz.\n", target_freq_hz);
+      return -1;
+    }
+  }
+  
   // Timing validation variables
-  long target_interval_us = 1000;  // 1ms target interval in microseconds
+  long target_interval_us = 1000000 / target_freq_hz;  // Convert Hz to microseconds
   int timing_violations = 0;
   long max_loop_time_us = 0;
   long total_loop_time_us = 0;
 
-  if (argc != 3) {
-    printf("Usage: %s LOGFILE RUNTIME\n", argv[0]);
+  if (argc < 3 || argc > 4) {
+    printf("Usage: %s LOGFILE RUNTIME [FREQUENCY_HZ]\n", argv[0]);
+    printf("  LOGFILE      - Output CSV file\n");
+    printf("  RUNTIME      - Recording duration in seconds\n");
+    printf("  FREQUENCY_HZ - Target sampling frequency (default: 350Hz, max: 1000Hz)\n");
     return -1;
   }
 
@@ -297,7 +310,11 @@ int main(int argc, char **argv) {
 
   int runtime = atoi(argv[2]);
 
-  for (int i = 0; i < runtime * 1000; i++) {
+  int total_samples = runtime * target_freq_hz;
+  printf("Target: %d Hz (%ld μs interval), collecting %d samples\n", 
+         target_freq_hz, target_interval_us, total_samples);
+  
+  for (int i = 0; i < total_samples; i++) {
     // Start timing this loop iteration
     clock_gettime(CLOCK_MONOTONIC_RAW, &loop_start);
 
@@ -408,17 +425,17 @@ int main(int argc, char **argv) {
 
   // Print timing performance summary
   printf("\n=== Timing Performance Summary ===\n");
-  printf("Target sampling rate: 1000 Hz (1000μs interval)\n");
-  printf("Total samples: %d\n", runtime * 1000);
+  printf("Target sampling rate: %d Hz (%ldμs interval)\n", target_freq_hz, target_interval_us);
+  printf("Total samples: %d\n", total_samples);
   printf("Timing violations: %d (%.2f%%)\n", timing_violations, 
-         (timing_violations * 100.0) / (runtime * 1000));
+         (timing_violations * 100.0) / total_samples);
   printf("Max loop time: %ldμs\n", max_loop_time_us);
-  printf("Average loop time: %ldμs\n", total_loop_time_us / (runtime * 1000));
+  printf("Average loop time: %ldμs\n", total_loop_time_us / total_samples);
   if (timing_violations > 0) {
-    printf("WARNING: %d samples exceeded 1ms target - actual sampling rate lower than 1000Hz\n", 
-           timing_violations);
+    printf("WARNING: %d samples exceeded %ldμs target - actual sampling rate lower than %dHz\n", 
+           timing_violations, target_interval_us, target_freq_hz);
   } else {
-    printf("SUCCESS: All samples collected within 1ms target\n");
+    printf("SUCCESS: All samples collected within %ldμs target\n", target_interval_us);
   }
 
   fclose(fd);

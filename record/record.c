@@ -280,8 +280,8 @@ int main(int argc, char **argv) {
   signal(SIGINT, int_handler);
 
   for (int i = 0; i < sysconf(_SC_NPROCESSORS_ONLN); i++) {
-    ioctl(perf_events[0].fd[0], PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
-    ioctl(perf_events[0].fd[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
+    ioctl(perf_events[i].fd[0], PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
+    ioctl(perf_events[i].fd[0], PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
   }
   printf("Logging start\n");
 
@@ -400,7 +400,7 @@ int main(int argc, char **argv) {
   close(i2c);
   printf("GPIO close\n");
 
-  for (int i = sysconf(_SC_NPROCESSORS_ONLN); i >= 0; i--)
+  for (int i = sysconf(_SC_NPROCESSORS_ONLN) - 1; i >= 0; i--)
     for (int it = 0; it < NUM_EVENTS; it++)
       close(perf_events[i].fd[it]);
 

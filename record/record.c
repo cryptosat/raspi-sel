@@ -236,7 +236,13 @@ int main(int argc, char **argv) {
   struct perf_ptr perf_events[sysconf(_SC_NPROCESSORS_ONLN)];
   char buf[(NUM_EVENTS * 2 + 1) * sizeof(uint64_t)];
   struct read_format *rf = (struct read_format *)buf;
-  struct timespec start, counter;
+  struct timespec start, counter, loop_start, loop_end;
+
+  // Timing validation variables
+  long target_interval_us = 1000;  // 1ms target interval in microseconds
+  int timing_violations = 0;
+  long max_loop_time_us = 0;
+  long total_loop_time_us = 0;
 
   if (argc != 3) {
     printf("Usage: %s LOGFILE RUNTIME\n", argv[0]);
@@ -292,6 +298,9 @@ int main(int argc, char **argv) {
   int runtime = atoi(argv[2]);
 
   for (int i = 0; i < runtime * 1000; i++) {
+    // Start timing this loop iteration
+    clock_gettime(CLOCK_MONOTONIC_RAW, &loop_start);
+
     // Read from INA3221
     int shunt2 = i2c_smbus_read_word_data(i2c, REG_DATA_ch2);
     shunt2 = change_endian(shunt2) /
@@ -359,7 +368,33 @@ int main(int argc, char **argv) {
     // Save previous io_stats value
     io_stats_last = io_stats;
 
-    usleep(1000);
+    // End timing and validate loop performance
+    clock_gettime(CLOCK_MONOTONIC_RAW, &loop_end);
+    long loop_time_ns = (loop_end.tv_sec - loop_start.tv_sec) * 1000000000L + 
+                        (loop_end.tv_nsec - loop_start.tv_nsec);
+    long loop_time_us = loop_time_ns / 1000;
+
+    total_loop_time_us += loop_time_us;
+    if (loop_time_us > max_loop_time_us) {
+      max_loop_time_us = loop_time_us;
+    }
+
+    // Check for timing violations
+    if (loop_time_us > target_interval_us) {
+      timing_violations++;
+      if (timing_violations <= 10) {  // Only show first 10 violations to avoid spam
+        fprintf(stderr, "Warning: Loop %d took %ldμs (target: %ldμs)\n", 
+                i, loop_time_us, target_interval_us);
+      } else if (timing_violations == 11) {
+        fprintf(stderr, "Further timing warnings suppressed...\n");
+      }
+    }
+
+    // Sleep for remaining time to maintain target interval
+    long remaining_time_us = target_interval_us - loop_time_us;
+    if (remaining_time_us > 0) {
+      usleep(remaining_time_us);
+    }
   }
 
   close(i2c);
@@ -370,6 +405,21 @@ int main(int argc, char **argv) {
       close(perf_events[i].fd[it]);
 
   printf("Perf events closed\n");
+
+  // Print timing performance summary
+  printf("\n=== Timing Performance Summary ===\n");
+  printf("Target sampling rate: 1000 Hz (1000μs interval)\n");
+  printf("Total samples: %d\n", runtime * 1000);
+  printf("Timing violations: %d (%.2f%%)\n", timing_violations, 
+         (timing_violations * 100.0) / (runtime * 1000));
+  printf("Max loop time: %ldμs\n", max_loop_time_us);
+  printf("Average loop time: %ldμs\n", total_loop_time_us / (runtime * 1000));
+  if (timing_violations > 0) {
+    printf("WARNING: %d samples exceeded 1ms target - actual sampling rate lower than 1000Hz\n", 
+           timing_violations);
+  } else {
+    printf("SUCCESS: All samples collected within 1ms target\n");
+  }
 
   fclose(fd);
   return 0;

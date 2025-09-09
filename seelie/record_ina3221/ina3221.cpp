@@ -37,7 +37,7 @@ INA3221::INA3221() {
   if (i2c == -1)
     throw std::runtime_error("Failed to open I2C interface");
 
-  if (ioctl(i2c, I2C_SLAVE, 0x40) < 0) {
+  if (ioctl(i2c, I2C_SLAVE, DEVICE_ID) < 0) {
     close(i2c);
     throw std::runtime_error("Failed to open target I2C device");
   }

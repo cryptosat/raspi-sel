@@ -267,7 +267,7 @@ int main(int argc, char **argv) {
   if (i2c == -1)
     return -2;
 
-  if (ioctl(i2c, I2C_SLAVE, 0x41) < 0) {
+  if (ioctl(i2c, I2C_SLAVE, DEVICE_ID) < 0) {
     close(i2c);
     return -4;
   }

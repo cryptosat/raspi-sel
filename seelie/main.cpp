@@ -1,6 +1,7 @@
 #include <csignal>
 #include <cstdio>
 #include <fstream>
+#include <iomanip>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -14,7 +15,8 @@
 #include "record_system.h"
 
 struct OutputData {
-  uint8_t trigger_count, latchup_count;
+  uint8_t trigger_count;
+  uint8_t latchup_count;
 };
 
 inline void latchup_test(Model &classify_model, RecordSystem &system_stats,
@@ -37,8 +39,6 @@ inline void latchup_test(Model &classify_model, RecordSystem &system_stats,
                                  system_stats.get_system_info());
     if (classify_model.test_model()) {
       std::cout << "Potential latchup detected!" << std::endl;
-
-      uint8_t output = 0x0;
 
       output_data.latchup_count += 1;
       if (output_data.latchup_count > 0b00001111)
@@ -69,7 +69,6 @@ int main(int argc, char **argv) {
   std::string model_file;
   std::tuple<double, double> predicted, actual;
   OutputData output_data;
-  char output = 0x0;
 
   if (argc != 2) {
     printf("Usage: %s MODEL_FILE\n", argv[0]);
@@ -84,18 +83,24 @@ int main(int argc, char **argv) {
 
   if (std::filesystem::exists("one_byte_telemetry")) {
     // one_byte_telemetry exists, read in latest data
-    std::ifstream output_file("one_byte_telemetry",
-                              std::ios::in | std::ios::binary);
-    output_file.read(&output, 1);
-    output_data.latchup_count = output & 0b00001111;
-    output_data.trigger_count = output >> 4;
+    std::ifstream one_byte_telemetry_file("one_byte_telemetry",
+                                          std::ios::in | std::ios::binary);
+    char raw_data;
+    one_byte_telemetry_file.read(&raw_data, 1);
+    auto data = static_cast<uint8_t>(raw_data);
+
+    output_data.latchup_count = data & 0b00001111;
+    output_data.trigger_count = data >> 4;
   } else {
-    // Ensure write of one_byte_telemetry
-    std::ofstream output_file("one_byte_telemetry",
-                              std::ios::out | std::ios::binary);
-    output_file << 0x0;
-    output_file.close();
+    output_data.latchup_count = 0;
+    output_data.trigger_count = 0;
   }
+
+  std::cout << "Counters from previous run, if any: run "
+            << static_cast<unsigned int>(output_data.trigger_count)
+            << " times, "
+            << static_cast<unsigned int>(output_data.latchup_count)
+            << " latchup events detected\n";
 
   // Increase trigger count now that idle is detected
   output_data.trigger_count += 1;
@@ -104,16 +109,23 @@ int main(int argc, char **argv) {
 
   latchup_test(classify_model, system_stats, current_stats, output_data);
 
-  // Format output byte
-  output = 0x0;
-  output |= output_data.latchup_count & 0b00001111;
-  output |= (output_data.trigger_count << 4);
+  unsigned int one_byte_telemetry = 0x0;
+  one_byte_telemetry |= static_cast<unsigned int>(output_data.latchup_count & 0b00001111);
+  one_byte_telemetry |= static_cast<unsigned int>(output_data.trigger_count << 4);
+
+  std::cout << "Counters after test: run "
+            << static_cast<unsigned int>(output_data.trigger_count)
+            << ", latchup detected "
+            << static_cast<unsigned int>(output_data.latchup_count)
+            << ", one byte telemetry 0x"
+            << std::hex << std::uppercase << std::setw(2)
+            << one_byte_telemetry
+            << "\n";
 
   // Write output byte
-  std::ofstream output_file("one_byte_telemetry",
-                            std::ios::out | std::ios::binary);
-  output_file << output;
-  output_file.close();
+  std::ofstream one_byte_telemetry_file("one_byte_telemetry",
+                                        std::ios::out | std::ios::binary);
+  one_byte_telemetry_file << static_cast<char>(one_byte_telemetry);
 
   return 0;
 }

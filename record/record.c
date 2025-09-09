@@ -368,7 +368,7 @@ int main(int argc, char **argv) {
     fprintf(fd, "%f,", ch2_amp);
     fprintf(fd, "%f", ch3_amp);
     for (int cpu = 0; cpu < sysconf(_SC_NPROCESSORS_ONLN); cpu++) {
-      fprintf(fd, ",%llu,%llu,%llu,%llu,%llu,%llu,%llu,%u",
+      fprintf(fd, ",%lu,%lu,%lu,%lu,%lu,%lu,%lu,%u",
               perf_events[cpu].cpu_cycles, perf_events[cpu].insns,
               perf_events[cpu].cache_hit, perf_events[cpu].cache_miss,
               perf_events[cpu].br_insns, perf_events[cpu].br_miss,

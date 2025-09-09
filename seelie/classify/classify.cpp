@@ -11,7 +11,7 @@ bool Model::test_model() {
   double curr_diff = 0;
   static int call_count = 0;
   call_count++;
-  
+
   for (size_t i = 0; i < data_fifo.size(); i++) {
     size_t first_data_point = i >= 12 ? i - 12 : 0;
     size_t last_data_point = i + 12 < data_fifo.size() ? i + 12 : data_fifo.size();
@@ -27,7 +27,7 @@ bool Model::test_model() {
   }
 
   bool detection = curr_diff >= 0.06;
-  
+
   // Log diagnostic data every 50 calls for authors
   if (call_count % 50 == 0) {
     printf("DEBUG[%d]: buffer_size=%zu, curr_diff=%.6f, threshold=0.06, detection=%s\n", 

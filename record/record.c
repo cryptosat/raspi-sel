@@ -25,6 +25,11 @@
 #define REG_DATA_ch2 0x03
 #define REG_DATA_ch3 0x05
 
+// external shunt R on device is 0.05 ohm
+#define EXTERNAL_SHUNT_RESISTOR_VALUE_OHM 0.05
+// shunt raw value to mv (40μV datasheet)
+#define ADC_SHUNT_LSB_UV 0.00004
+
 // Perf helpers
 #define NUM_EVENTS 7
 
@@ -71,16 +76,13 @@ unsigned int change_endian(unsigned int x) {
   return ((ptr[0] << 8) | ptr[1]);
 }
 
-float shunt_to_amp(int shunt) {
+double shunt_to_amp(int shunt) {
   // sign change for negative value (bit 13 is sign)
   if (shunt > 4096)
     shunt = -(8192 - shunt);
 
-  // shunt raw value to mv (40μV datasheet)
-  float amp1mv = 0.0004 * shunt;
-
-  // without external shunt R on device is 0.1 ohm
-  return amp1mv / 0.1;
+  double amp1mv = ADC_SHUNT_LSB_UV * shunt;
+  return amp1mv / EXTERNAL_SHUNT_RESISTOR_VALUE_OHM;
 }
 
 struct perf_ptr init_perf_event(int cpu) {
@@ -322,12 +324,12 @@ int main(int argc, char **argv) {
     int shunt2 = i2c_smbus_read_word_data(i2c, REG_DATA_ch2);
     shunt2 = change_endian(shunt2) /
              8; // change endian, strip last 3 bits provide raw value
-    float ch2_amp = shunt_to_amp(shunt2);
+    double ch2_amp = shunt_to_amp(shunt2);
 
     int shunt3 = i2c_smbus_read_word_data(i2c, REG_DATA_ch3);
     shunt3 = change_endian(shunt3) /
              8; // change endian, strip last 3 bits provide raw value
-    float ch3_amp = shunt_to_amp(shunt3);
+    double ch3_amp = shunt_to_amp(shunt3);
 
     // Read from perf counters
     for (int cpu = 0; cpu < sysconf(_SC_NPROCESSORS_ONLN); cpu++)

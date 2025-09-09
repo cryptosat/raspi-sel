@@ -11,6 +11,11 @@
 #define REG_DATA_ch2 0x03
 #define REG_DATA_ch3 0x05
 
+// external shunt R on device is 0.05 ohm
+#define EXTERNAL_SHUNT_RESISTOR_VALUE_OHM 0.05
+// shunt raw value to mv (40μV datasheet)
+#define ADC_SHUNT_LSB_UV 0.00004
+
 class INA3221 {
 private:
   int i2c;

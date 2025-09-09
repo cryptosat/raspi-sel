@@ -24,11 +24,8 @@ inline double shunt_to_amp(int shunt) {
   if (shunt > 4096)
     shunt = -(8192 - shunt);
 
-  // shunt raw value to mv (40μV datasheet)
-  amp1mv = 0.0004 * shunt;
-
-  // without external shunt R on device is 0.1 ohm
-  return amp1mv / 0.1;
+  amp1mv = ADC_SHUNT_LSB_UV * shunt;
+  return amp1mv / EXTERNAL_SHUNT_RESISTOR_VALUE_OHM;
 }
 
 INA3221::INA3221() {
